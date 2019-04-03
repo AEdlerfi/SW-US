@@ -107,14 +107,20 @@ summary(ModH1)
 # Note: Add further analysis following matlab example
 
 #-----------------------------------------------------------------------
+# Restrict any coefficients to zero if p-val < 2 
+#-----------------------------------------------------------------------
+
+#-----------------------------------------------------------------------
 # Estimate the VAR model from the VEC 
 #-----------------------------------------------------------------------
 
 ModH1 <- vec2var(ModH1, r = 4)
 
+ModH2 <- VAR(Data.mod, p = 3, type = "const")
+
 # Resrict any coefficients to zero if p-val is less than 0
 
-#ResModh1 <-  restrict(ModH1, method = "ser", thresh = 2.0)
+ResModh2 <-  restrict(ModH2, method = "ser", thresh = 2.0)
 
 # Extract cointegration relations and plot
 
@@ -122,7 +128,24 @@ ModH1 <- vec2var(ModH1, r = 4)
 # IRFs 
 #-----------------------------------------------------------------------
 
+ResponsesGDP <- ModH1 %>% 
+  irf(response = "GDP", n.ahead = 40)
+
+
+responses <- list()
+for(i in names(ResponsesGDP$irf)){
+  
+  responses[[paste(i)]] <- as.numeric(ResponsesGDP$irf[[i]])
+  responses[[paste0(i,"_l")]] <- as.numeric(ResponsesGDP$Lower[[i]])
+  responses[[paste0(i,"_u")]] <- as.numeric(ResponsesGDP$Upper[[i]])
+  
+}
+
+responses <- bind_cols(responses)
+
 
 #-----------------------------------------------------------------------
 # Out of sample forecasting 
 #-----------------------------------------------------------------------
+
+ResModh2 %>% predict(h = 20) %>% plot()
