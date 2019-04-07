@@ -109,6 +109,19 @@ summary(ModH1)
 #-----------------------------------------------------------------------
 # Restrict any coefficients to zero if p-val < 2 
 #-----------------------------------------------------------------------
+# To do this, estimate VAR in differences with error correction term as a exogenous regressor - this is the MATLAB process.
+
+ectMod1 <- cajorls(ModH1,r = 4)$beta
+
+ectMod1 <-  t(ectMod1)%*%t(cbind(as.matrix(Data.mod[-1,]),1))
+
+diff.Data.mod <- Data.mod %>% 
+  sapply(function(x) diff(as.numeric(x)) )
+
+
+VECM.H1 <-  VAR(diff.Data.mod, p =2 ,type = "none", exogen = t(ectMod1))
+
+VECM.H1.restrict <- restrict(VECM.H1)
 
 #-----------------------------------------------------------------------
 # Estimate the VAR model from the VEC 
@@ -137,12 +150,49 @@ for(i in names(ResponsesGDP$irf)){
   
   responses[[paste(i)]] <- as.numeric(ResponsesGDP$irf[[i]])
   responses[[paste0(i,"_l")]] <- as.numeric(ResponsesGDP$Lower[[i]])
-  responses[[paste0(i,"_u")]] <- as.numeric(ResponsesGDP$Upper[[i]])
+  responses[[paste0(i,"_h")]] <- as.numeric(ResponsesGDP$Upper[[i]])
   
 }
 
-responses <- bind_cols(responses)
+responses <- bind_cols(responses) %>% 
+  mutate(H = 1:41)
 
+charts <- list()
+for( i in 1:length(names(ResponsesGDP$irf) ) ){
+
+ charts[[names(ResponsesGDP$irf)[i] ]] <-  responses %>% 
+    gather(Var, Val, -H) %>% 
+    filter(Var == (names(ResponsesGDP$irf)[i])) %>%    
+    filter(!grepl("_h|_l",.$Var)) %>%
+    left_join(responses %>% 
+                gather(Var, Val, -H) %>% 
+                filter(grepl(paste0(names(ResponsesGDP$irf)[i],"_h"),.$Var)) %>%
+                mutate(Var = gsub("_h","",.$Var)) %>%
+                rename(Plus95 = Val)
+    ) %>%
+    left_join(responses %>% 
+                gather(Var, Val, -H) %>% 
+                filter(grepl(paste0(names(ResponsesGDP$irf)[i],"_l"),.$Var)) %>%
+                mutate(Var = gsub("_l","",.$Var)) %>%
+                rename(Less95 = Val )) %>%           
+    ggplot(aes(x=H))+
+    geom_line(aes(y = Val), colour = tst_colors[1])+
+    geom_ribbon(aes(ymin = Less95, ymax = Plus95, group = Var), alpha = 0.2, fill = tst_colors[2] ) +
+    tst_theme()+
+    scale_colour_tst()+
+    ggtitle(label = paste("GDP impulse response to",names(ResponsesGDP$irf)[i]))
+  
+    
+}
+
+gridExtra::grid.arrange(charts$GDP,
+                        charts$GDP.Deflator,
+                        charts$COE,
+                        charts$Hours,
+                        charts$Consumption,
+                        charts$Investment,
+                        charts$Federal.Funds, ncol =2)
+                          
 
 #-----------------------------------------------------------------------
 # Out of sample forecasting 
